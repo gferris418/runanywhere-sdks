@@ -51,19 +51,21 @@ namespace runanywhere {
 
 // Resolve the ONNX Runtime thread count for Sherpa STT/TTS. Honors the
 // SDK-set preference (rac_set_inference_threads); 0/unset means auto from
-// hardware_concurrency. On WASM the value is clamped to the module's pthread
-// pool (PTHREAD_POOL_SIZE=8); on a non-pthreads build the pool is absent, but
-// the web onnx module is now built with pthreads so >1 is safe.
+// hardware_concurrency. On the non-pthreads WASM build, force single-threaded
+// ORT because num_threads > 1 aborts when pthread_create is unavailable.
 static int sherpa_resolve_num_threads() {
     int pref = rac_get_inference_threads();
 #if defined(__EMSCRIPTEN__)
     // WASM: default single-threaded. The onnx/sherpa module is built without
     // pthreads (threads made these small speech models ~10x slower via ORT
     // thread-pool overhead), and ORT with num_threads>1 on a non-pthreads build
-    // aborts ("pthread_create failed"). A pthreads-enabled build can still
-    // request more explicitly via rac_set_inference_threads.
+    // aborts ("pthread_create failed").
+#if defined(__EMSCRIPTEN_PTHREADS__)
     if (pref <= 0) pref = 1;
     if (pref > 8) pref = 8;
+#else
+    pref = 1;
+#endif
 #else
     if (pref <= 0) {
         unsigned hc = std::thread::hardware_concurrency();
@@ -435,8 +437,8 @@ bool SherpaSTT::build_offline_recognizer_locked() {
 
     recognizer_config.model_config.tokens = tokens_path_.c_str();
     // Thread count is resolved from the SDK preference (rac_set_inference_threads)
-    // or hardware_concurrency. The web onnx module is now pthreads-enabled, so
-    // multi-threaded ORT is safe here.
+    // or hardware_concurrency. On non-pthreads WASM, the helper clamps to 1 so
+    // ORT does not try to create unavailable worker threads.
     recognizer_config.model_config.num_threads = sherpa_resolve_num_threads();
     recognizer_config.model_config.debug = 0;
     recognizer_config.model_config.provider = "cpu";
