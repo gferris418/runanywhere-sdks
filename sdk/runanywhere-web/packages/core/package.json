@@ -74,7 +74,7 @@
   "dependencies": {
     "@runanywhere/proto-ts": "^0.19.13",
     "long": "^5.3.2",
-    "protobufjs": "^7.5.8"
+    "protobufjs": "^8.8.1"
   },
   "tsd": {
     "directory": "tests/types"
